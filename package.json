@@ -1,0 +1,13 @@
+{
+  "name": "rps-showcase",
+  "private": true,
+  "workspaces": ["shared", "app"],
+  "scripts": {
+    "dev": "bun run dev:backend & bun run dev:app",
+    "dev:backend": "uv run --project backend uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 3001",
+    "dev:app": "cd app && bunx vite --host",
+    "backend:sync": "uv sync --project backend",
+    "test:backend": "uv run --project backend pytest",
+    "build:app": "cd app && bunx tsc -b && bunx vite build"
+  }
+}

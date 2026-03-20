@@ -1,0 +1,97 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    background: #08080c;
+    color: #e8e8ed;
+    font-family: "Outfit", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  ::selection {
+    background: rgba(0, 229, 160, 0.3);
+    color: #e8e8ed;
+  }
+}
+
+@layer components {
+  /* Subtle grid background */
+  .bg-grid {
+    background-image: linear-gradient(
+        rgba(255, 255, 255, 0.02) 1px,
+        transparent 1px
+      ),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+
+  /* Camera viewfinder corners — use as child divs with data-pos attr */
+  .vf-corner {
+    position: absolute;
+    width: 28px;
+    height: 28px;
+    border-color: #00e5a0;
+    border-style: solid;
+    pointer-events: none;
+    z-index: 10;
+  }
+  .vf-corner[data-pos="tl"] { top: -1px; left: -1px; border-width: 2px 0 0 2px; }
+  .vf-corner[data-pos="tr"] { top: -1px; right: -1px; border-width: 2px 2px 0 0; }
+  .vf-corner[data-pos="bl"] { bottom: -1px; left: -1px; border-width: 0 0 2px 2px; }
+  .vf-corner[data-pos="br"] { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; }
+
+  /* Scanline effect */
+  .scanline::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      transparent 0%,
+      rgba(0, 229, 160, 0.03) 50%,
+      transparent 100%
+    );
+    height: 33%;
+    animation: scan 3s linear infinite;
+    pointer-events: none;
+  }
+
+  /* Glow effects */
+  .glow-accent {
+    box-shadow: 0 0 30px rgba(0, 229, 160, 0.1),
+      0 0 60px rgba(0, 229, 160, 0.05);
+  }
+  .glow-warm {
+    box-shadow: 0 0 30px rgba(255, 107, 74, 0.1),
+      0 0 60px rgba(255, 107, 74, 0.05);
+  }
+  .text-glow-accent {
+    text-shadow: 0 0 20px rgba(0, 229, 160, 0.4);
+  }
+  .text-glow-warm {
+    text-shadow: 0 0 20px rgba(255, 107, 74, 0.4);
+  }
+
+  /* Noise overlay */
+  .noise::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    opacity: 0.5;
+  }
+}
