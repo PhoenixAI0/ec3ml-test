@@ -57,7 +57,13 @@ if [[ "$DATA_PATH" == "$PUBLIC_DATA" && ! -f "$DATA_PATH" ]]; then
 fi
 
 echo "Starting MLX training with dataset: $DATA_PATH"
-exec uv run --project "$BACKEND_DIR" python -m backend.scripts.train_model \
-  --backend mlx \
-  --data "$DATA_PATH" \
-  "${ARGS[@]}"
+if (( ${#ARGS[@]} )); then
+  exec uv run --project "$BACKEND_DIR" python -m backend.scripts.train_model \
+    --backend mlx \
+    --data "$DATA_PATH" \
+    "${ARGS[@]}"
+else
+  exec uv run --project "$BACKEND_DIR" python -m backend.scripts.train_model \
+    --backend mlx \
+    --data "$DATA_PATH"
+fi
