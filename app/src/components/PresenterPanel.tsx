@@ -12,9 +12,16 @@ interface Props {
 
 const SCENE_LABELS: Record<Scene, string> = {
   intro: "1 — Intro",
-  demo: "2 — Demo",
-  behind: "3 — Behind",
-  closing: "4 — Closing",
+  about: "2 — About",
+  vibes: "3 — Vibes",
+  reasons: "4 — Reasons",
+  familiar: "5 — Familiar",
+  section: "6 — Section",
+  bridge: "7 — Bridge",
+  demo: "8 — Demo",
+  behind: "9 — Behind",
+  closing: "10 — Closing",
+  join: "11 — Join",
 };
 
 const MODES: RuntimeMode[] = ["simulate", "live_cv"];
@@ -41,10 +48,10 @@ export function PresenterPanel({ send, connect, disconnect }: Props) {
   }
 
   const btn =
-    "px-3 py-1.5 rounded text-xs font-mono tracking-wide transition-colors cursor-pointer";
-  const btnPrimary = `${btn} bg-accent/15 text-accent border border-accent/30 hover:bg-accent/25`;
-  const btnWarm = `${btn} bg-warm/15 text-warm border border-warm/30 hover:bg-warm/25`;
-  const btnMuted = `${btn} bg-base-200 text-text-secondary border border-border hover:bg-base-300`;
+    "px-3 py-1.5 rounded-md text-xs font-mono tracking-wide transition-all duration-200 cursor-pointer";
+  const btnPrimary = `${btn} bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 hover:border-accent/35`;
+  const btnWarm = `${btn} bg-warm/10 text-warm border border-warm/20 hover:bg-warm/20 hover:border-warm/35`;
+  const btnMuted = `${btn} bg-base-200/80 text-text-secondary border border-border/60 hover:bg-base-300 hover:border-border`;
 
   const sendCommand = (
     command: Extract<ClientMessage, { type: "presenter_command" }>["command"]
@@ -61,7 +68,7 @@ export function PresenterPanel({ send, connect, disconnect }: Props) {
         animate={{ x: 0 }}
         exit={{ x: "100%" }}
         transition={{ type: "spring", damping: 25, stiffness: 300 }}
-        className="fixed right-0 top-0 bottom-0 w-80 bg-base-100/95 backdrop-blur-md border-l border-border z-50 overflow-y-auto"
+        className="fixed right-0 top-0 bottom-0 w-80 bg-base-100/95 backdrop-blur-xl border-l border-border/40 z-50 overflow-y-auto"
       >
         <div className="p-5 space-y-5">
           <div className="flex items-center justify-between">
@@ -69,11 +76,16 @@ export function PresenterPanel({ send, connect, disconnect }: Props) {
               Presenter
             </h3>
             <div className="flex items-center gap-2">
-              <div
-                className={`w-2 h-2 rounded-full ${
-                  connected ? "bg-accent" : "bg-warm"
-                }`}
-              />
+              <div className="relative">
+                <div
+                  className={`w-2 h-2 rounded-full ${
+                    connected ? "bg-teal" : "bg-warm"
+                  }`}
+                />
+                {connected && (
+                  <div className="absolute inset-0 w-2 h-2 rounded-full bg-teal animate-ping opacity-30" />
+                )}
+              </div>
               <span className="font-mono text-xs text-text-secondary">
                 {connected ? "live" : "offline"}
               </span>
@@ -98,8 +110,8 @@ export function PresenterPanel({ send, connect, disconnect }: Props) {
                   key={value}
                   className={`${btn} border ${
                     scene === value
-                      ? "bg-accent/20 text-accent border-accent/40"
-                      : "bg-base-200 text-text-secondary border-border hover:bg-base-300"
+                      ? "bg-accent/15 text-accent border-accent/30"
+                      : "bg-base-200/80 text-text-secondary border-border/60 hover:bg-base-300"
                   }`}
                   onClick={() => setScene(value)}
                 >
@@ -116,8 +128,8 @@ export function PresenterPanel({ send, connect, disconnect }: Props) {
                   key={value}
                   className={`${btn} border ${
                     mode === value
-                      ? "bg-accent/20 text-accent border-accent/40"
-                      : "bg-base-200 text-text-secondary border-border hover:bg-base-300"
+                      ? "bg-accent/15 text-accent border-accent/30"
+                      : "bg-base-200/80 text-text-secondary border-border/60 hover:bg-base-300"
                   }`}
                   onClick={() => send({ type: "set_mode", mode: value })}
                 >
@@ -128,7 +140,7 @@ export function PresenterPanel({ send, connect, disconnect }: Props) {
           </Section>
 
           <Section title="Status">
-            <div className="space-y-1 font-mono text-xs text-text-muted">
+            <div className="space-y-1.5 font-mono text-xs text-text-muted">
               <div>
                 phase: <span className="text-accent">{demoPhase}</span>
               </div>
@@ -144,7 +156,7 @@ export function PresenterPanel({ send, connect, disconnect }: Props) {
               </div>
               <div>
                 hand:{" "}
-                <span className={handDetected ? "text-accent" : "text-text-muted"}>
+                <span className={handDetected ? "text-teal" : "text-text-muted"}>
                   {handDetected ? "detected" : "none"}
                 </span>
               </div>
@@ -204,7 +216,7 @@ export function PresenterPanel({ send, connect, disconnect }: Props) {
             <div className="space-y-3">
               <div className="flex flex-wrap gap-2">
                 <button className={btnPrimary} onClick={() => send({ type: "advance_round" })}>
-                  Advance
+                  Start Round
                 </button>
                 <button
                   className={btnPrimary}
@@ -227,7 +239,7 @@ export function PresenterPanel({ send, connect, disconnect }: Props) {
               </div>
 
               <div>
-                <label className="font-mono text-xs text-text-muted block mb-1.5">
+                <label className="font-mono text-[10px] text-text-muted block mb-1.5 tracking-wider uppercase">
                   Computer Move
                 </label>
                 <div className="flex gap-2">
@@ -245,7 +257,7 @@ export function PresenterPanel({ send, connect, disconnect }: Props) {
                 </div>
               </div>
 
-              <div className="flex gap-2 pt-1 border-t border-border">
+              <div className="flex gap-2 pt-2 border-t border-border/30">
                 <button className={btnWarm} onClick={() => send({ type: "reset_round" })}>
                   Reset
                 </button>
@@ -263,13 +275,14 @@ export function PresenterPanel({ send, connect, disconnect }: Props) {
           </Section>
 
           <Section title="Keyboard">
-            <div className="font-mono text-xs text-text-muted space-y-1">
-              <div>Demo scene: Space or Enter — advance round</div>
-              <div>Demo scene: R / P / S — set computer move</div>
-              <div>← → or Backspace — navigate slides</div>
-              <div>1–4 — jump to scene</div>
-              <div>P — toggle this panel outside demo</div>
-              <div>Shift+P — toggle this panel during demo</div>
+            <div className="font-mono text-[10px] text-text-muted/70 space-y-1.5 tracking-wide">
+              <div>Space / Enter — start round</div>
+              <div>Hold stable gesture 2s — auto start</div>
+              <div>R / P / S — set computer move</div>
+              <div>← → / Backspace — navigate</div>
+              <div>0–9 / J — jump to scene</div>
+              <div>P — toggle panel</div>
+              <div>Shift+P — panel during demo</div>
             </div>
           </Section>
         </div>
@@ -287,7 +300,7 @@ function Section({
 }) {
   return (
     <div>
-      <h4 className="font-mono text-xs text-text-muted uppercase tracking-widest mb-2">
+      <h4 className="font-mono text-[10px] text-text-muted/60 uppercase tracking-[0.2em] mb-2.5">
         {title}
       </h4>
       {children}

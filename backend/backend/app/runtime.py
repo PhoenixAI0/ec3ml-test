@@ -15,9 +15,8 @@ import numpy as np
 from fastapi import WebSocket
 
 from backend.app.protocol import parse_client_message
-from backend.classifiers.base import ClassificationResult
+from backend.classifiers.base import ClassificationResult, GestureClassifier
 from backend.classifiers.heuristic import HeuristicGestureClassifier
-from backend.classifiers.learned import LearnedLandmarkClassifier, load_validated_model
 from backend.cv.features import extract_feature_bundle
 from backend.cv.hand_tracker import HandTracker
 from backend.game.simulation import SIMULATION_PREDICTIONS
@@ -64,11 +63,18 @@ class PredictionSmoother:
 
 
 class AppRuntime:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        auto_reveal_delay: float = 0.6,
+        auto_result_delay: float = 0.9,
+        auto_reset_delay: float = 2.4,
+        auto_start_hold_seconds: float = 2.0,
+    ) -> None:
         self.manager = RoundManager()
         self.hand_tracker = HandTracker()
         self.heuristic_classifier = HeuristicGestureClassifier()
-        self.learned_classifier: LearnedLandmarkClassifier | None = None
+        self.learned_classifier: GestureClassifier | None = None
         self.model_loaded = False
         self.fallback_reason = "Learned model not loaded"
         self.websockets: set[WebSocket] = set()
@@ -82,6 +88,13 @@ class AppRuntime:
         self.autoplay_task: asyncio.Task[None] | None = None
         self.countdown_task: asyncio.Task[None] | None = None
         self.state_lock = asyncio.Lock()
+        self.auto_reveal_delay = auto_reveal_delay
+        self.auto_result_delay = auto_result_delay
+        self.auto_reset_delay = auto_reset_delay
+        self.auto_start_hold_seconds = auto_start_hold_seconds
+        self.auto_start_move: str | None = None
+        self.auto_start_started_at: float | None = None
+        self.auto_start_pending = False
 
     async def startup(self) -> None:
         self._load_classifiers()
@@ -115,6 +128,8 @@ class AppRuntime:
         self.hand_tracker.close()
 
     def _load_classifiers(self) -> None:
+        from backend.classifiers.learned import LearnedLandmarkClassifier, load_validated_model
+
         model_path = Path(__file__).resolve().parents[2] / "models" / "gesture_model.joblib"
         metadata_path = Path(__file__).resolve().parents[2] / "models" / "gesture_model.metadata.json"
         loaded = load_validated_model(model_path, metadata_path, FEATURE_VERSION)
@@ -226,6 +241,7 @@ class AppRuntime:
         await self._cancel_tasks()
         async with self.state_lock:
             self.smoother.reset()
+            self._clear_auto_start_tracking()
             self.manager.set_mode(mode)  # type: ignore[arg-type]
             self.manager.update_health(message=None)
         await self._broadcast_json({"type": "mode_update", "mode": mode})
@@ -345,12 +361,26 @@ class AppRuntime:
     async def _start_countdown(self) -> None:
         if self.countdown_task is not None and not self.countdown_task.done():
             return
+        self._clear_auto_start_tracking()
         self.countdown_task = asyncio.create_task(self._run_countdown())
 
     async def _run_countdown(self) -> None:
         async with self.state_lock:
-            self.manager.start_countdown()
-            count = self.manager.state.countdown_value
+            locked_move = self.manager.start_countdown()
+            if locked_move is None:
+                self.manager.update_health(message="Hold one stable gesture before starting")
+                phase = self.manager.state.phase
+            else:
+                count = self.manager.state.countdown_value
+                phase = self.manager.state.phase
+        if locked_move is None:
+            await self._broadcast_json(
+                {"type": "error", "message": "Hold one stable gesture before starting the timer."}
+            )
+            await self._broadcast_json({"type": "phase_change", "phase": phase})
+            await self._broadcast_snapshot()
+            return
+
         await self._broadcast_phase()
         await self._broadcast_json({"type": "countdown_update", "count": count})
         await self._broadcast_snapshot()
@@ -365,23 +395,84 @@ class AppRuntime:
         await asyncio.sleep(1)
         async with self.state_lock:
             locked_move = self.manager.lock_current_move()
-            if locked_move is None:
-                if self.manager.state.hand_detected:
-                    self.manager.state.phase = "predicting"
-                else:
-                    self.manager.state.phase = "waiting_for_hand"
-                self.manager.update_health(message="No stable gesture to lock")
-        if locked_move is None:
-            await self._broadcast_json(
-                {"type": "error", "message": "No stable gesture available. Try again or use presenter override."}
-            )
-            await self._broadcast_phase()
-            await self._broadcast_snapshot()
-            return
 
         await self._broadcast_phase()
         await self._broadcast_json({"type": "round_locked", "playerMove": locked_move})
         await self._broadcast_snapshot()
+        await self._auto_complete_round()
+
+    def _clear_auto_start_tracking(self) -> None:
+        self.auto_start_move = None
+        self.auto_start_started_at = None
+        self.auto_start_pending = False
+
+    def _update_auto_start_tracking(self, now: float) -> bool:
+        state = self.manager.state
+        if state.mode != "live_cv" or state.phase not in {"waiting_for_hand", "hand_detected", "predicting"}:
+            self._clear_auto_start_tracking()
+            return False
+
+        locked_candidate = state.lockable_move()
+        if locked_candidate is None:
+            self._clear_auto_start_tracking()
+            return False
+
+        if self.auto_start_pending:
+            return False
+
+        if locked_candidate != self.auto_start_move:
+            self.auto_start_move = locked_candidate
+            self.auto_start_started_at = now
+            return False
+
+        if self.auto_start_started_at is None:
+            self.auto_start_started_at = now
+            return False
+
+        if now - self.auto_start_started_at >= self.auto_start_hold_seconds:
+            self.auto_start_pending = True
+            return True
+
+        return False
+
+    async def _auto_complete_round(self) -> None:
+        await asyncio.sleep(self.auto_reveal_delay)
+
+        computer_move: str | None = None
+        should_reveal = False
+        async with self.state_lock:
+            if self.manager.state.phase == "locked":
+                if self.manager.state.computer_move is None:
+                    self.manager.set_computer_move(random.choice(["rock", "paper", "scissors"]))
+                self.manager.trigger_reveal()
+                computer_move = self.manager.state.computer_move
+                should_reveal = True
+        if should_reveal:
+            await self._broadcast_json({"type": "computer_move", "move": computer_move})
+            await self._broadcast_phase_snapshot()
+
+        await asyncio.sleep(self.auto_result_delay)
+
+        result: dict[str, object] | None = None
+        score: dict[str, int] | None = None
+        async with self.state_lock:
+            if self.manager.state.phase == "reveal":
+                result = self.manager.trigger_result()
+                if result is not None:
+                    score = dict(self.manager.state.score)
+        if result is not None and score is not None:
+            await self._broadcast_phase()
+            await self._broadcast_json({"type": "round_result", "result": result})
+            await self._broadcast_json({"type": "score_update", "score": score})
+            await self._broadcast_snapshot()
+
+        await asyncio.sleep(self.auto_reset_delay)
+
+        async with self.state_lock:
+            should_reset = self.manager.state.phase == "result"
+        if should_reset:
+            await self._reset_round_state()
+            await self._broadcast_phase_snapshot()
 
     async def _start_autoplay(self) -> None:
         async with self.state_lock:
@@ -403,9 +494,9 @@ class AppRuntime:
             await self._broadcast_phase_snapshot()
 
     async def _run_autoplay(self) -> None:
+        await self._reset_round_state(reset_smoother=False)
+        await self._broadcast_phase_snapshot()
         while True:
-            await self._reset_round_state(reset_smoother=False)
-            await self._broadcast_phase_snapshot()
             await asyncio.sleep(1.0)
 
             async with self.state_lock:
@@ -427,12 +518,6 @@ class AppRuntime:
                 await asyncio.sleep(0.45)
 
             await self._run_countdown()
-            await asyncio.sleep(0.8)
-            await self._handle_presenter_command({"action": "set_computer_move", "move": "rock"})
-            await self._handle_presenter_command({"action": "trigger_reveal"})
-            await asyncio.sleep(1.0)
-            await self._handle_presenter_command({"action": "trigger_result"})
-            await asyncio.sleep(3.0)
 
     async def _frame_loop(self) -> None:
         while True:
@@ -447,6 +532,7 @@ class AppRuntime:
             self.last_processed_sequence = frame.sequence
             if not self.hand_tracker.available:
                 async with self.state_lock:
+                    self._clear_auto_start_tracking()
                     self.manager.set_hand_detected(False)
                     self.manager.update_health(message=self.hand_tracker.reason)
                 await self._broadcast_hand_status()
@@ -462,6 +548,7 @@ class AppRuntime:
             if observation is None:
                 async with self.state_lock:
                     self.smoother.reset()
+                    self._clear_auto_start_tracking()
                     self.manager.set_hand_detected(False)
                     self.manager.apply_prediction(
                         move="unknown",
@@ -480,6 +567,7 @@ class AppRuntime:
             classifier = self.learned_classifier or self.heuristic_classifier
             result = classifier.predict(bundle)
             smoothed = self.smoother.add(result)
+            should_auto_start = False
             async with self.state_lock:
                 self.manager.set_hand_detected(True)
                 self.manager.apply_prediction(
@@ -489,10 +577,13 @@ class AppRuntime:
                     source="live_cv",
                 )
                 self.manager.update_health(message=None)
+                should_auto_start = self._update_auto_start_tracking(time.monotonic())
             await self._broadcast_hand_status()
             await self._broadcast_prediction()
             await self._broadcast_phase()
             await self._broadcast_snapshot()
+            if should_auto_start:
+                await self._start_countdown()
 
     async def _health_loop(self) -> None:
         while True:
@@ -507,6 +598,7 @@ class AppRuntime:
                 message = None
                 if self.manager.state.mode == "live_cv" and frame_age_ms is not None and frame_age_ms > 1500:
                     self.smoother.reset()
+                    self._clear_auto_start_tracking()
                     stale_transition = self.manager.state.hand_detected
                     self.manager.set_hand_detected(False)
                     if self.manager.state.phase not in {"countdown", "locked", "reveal", "result"}:
@@ -536,6 +628,7 @@ class AppRuntime:
         async with self.state_lock:
             if reset_smoother:
                 self.smoother.reset()
+            self._clear_auto_start_tracking()
             self.manager.reset_round()
 
     async def _broadcast_phase_snapshot(self) -> None:

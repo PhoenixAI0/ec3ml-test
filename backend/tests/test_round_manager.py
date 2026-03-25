@@ -23,6 +23,33 @@ def test_lock_and_score_round() -> None:
     assert manager.state.score["player"] == 1
 
 
+def test_countdown_keeps_initial_locked_move() -> None:
+    manager = RoundManager()
+    manager.set_mode("simulate")
+    manager.set_hand_detected(True)
+    manager.apply_prediction(
+        move="rock",
+        confidences={"rock": 0.9, "paper": 0.05, "scissors": 0.05},
+        stable=True,
+        source="simulation",
+    )
+
+    locked = manager.start_countdown()
+    assert locked == "rock"
+    assert manager.snapshot()["lockedPlayerMove"] == "rock"
+
+    manager.apply_prediction(
+        move="paper",
+        confidences={"rock": 0.05, "paper": 0.9, "scissors": 0.05},
+        stable=True,
+        source="simulation",
+    )
+
+    locked = manager.lock_current_move()
+    assert locked == "rock"
+    assert manager.snapshot()["playerMove"] == "rock"
+
+
 def test_override_survives_live_prediction() -> None:
     manager = RoundManager()
     manager.set_mode("live_cv")
@@ -82,6 +109,7 @@ def test_countdown_fails_without_stable_move() -> None:
         stable=False,
         source="live_cv",
     )
-    manager.start_countdown()
+    started = manager.start_countdown()
+    assert started is None
     locked = manager.lock_current_move()
     assert locked is None

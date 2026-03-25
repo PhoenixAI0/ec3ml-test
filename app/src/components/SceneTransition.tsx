@@ -9,17 +9,20 @@ interface Props {
 const variants = {
   enter: {
     opacity: 0,
-    y: 30,
-    filter: "blur(4px)",
+    y: 40,
+    scale: 0.98,
+    filter: "blur(6px)",
   },
   center: {
     opacity: 1,
     y: 0,
+    scale: 1,
     filter: "blur(0px)",
   },
   exit: {
     opacity: 0,
     y: -30,
+    scale: 0.99,
     filter: "blur(4px)",
   },
 };
@@ -34,7 +37,7 @@ export function SceneTransition({ sceneKey, children }: Props) {
         animate="center"
         exit="exit"
         transition={{
-          duration: 0.45,
+          duration: 0.5,
           ease: [0.25, 0.46, 0.45, 0.94],
         }}
         className="absolute inset-0 flex items-center justify-center"

@@ -59,6 +59,19 @@ export function useKeyboard({ send }: Props) {
         }
       }
 
+      if (/^[0-9]$/.test(e.key)) {
+        const idx = Number.parseInt(e.key, 10);
+        if (idx >= 0 && idx < SCENES.length) {
+          setScene(SCENES[idx] as Scene);
+        }
+        return;
+      }
+
+      if (e.key === "j" || e.key === "J") {
+        setScene(SCENES[SCENES.length - 1] as Scene);
+        return;
+      }
+
       switch (e.key) {
         case "ArrowRight":
         case " ":
@@ -70,16 +83,6 @@ export function useKeyboard({ send }: Props) {
           e.preventDefault();
           prevScene();
           break;
-        case "1":
-        case "2":
-        case "3":
-        case "4": {
-          const idx = parseInt(e.key) - 1;
-          if (idx >= 0 && idx < SCENES.length) {
-            setScene(SCENES[idx] as Scene);
-          }
-          break;
-        }
         case "p":
           if (!e.metaKey && !e.ctrlKey) {
             togglePresenter();

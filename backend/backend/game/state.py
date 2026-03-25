@@ -252,9 +252,14 @@ class RoundManager:
         self.state.override_confidences = empty_confidences()
         self.update_health(message=None)
 
-    def start_countdown(self) -> None:
+    def start_countdown(self) -> Move | None:
+        locked_move = self.state.locked_player_move or self.state.lockable_move()
+        if locked_move is None:
+            return None
+        self.state.locked_player_move = locked_move
         self.state.phase = "countdown"
         self.state.countdown_value = 3
+        return locked_move
 
     def set_countdown_value(self, value: int) -> None:
         self.state.countdown_value = value
@@ -263,7 +268,7 @@ class RoundManager:
         return self.state.lockable_move() is not None
 
     def lock_current_move(self) -> Move | None:
-        locked_move = self.state.lockable_move()
+        locked_move = self.state.locked_player_move or self.state.lockable_move()
         if locked_move is None:
             return None
         self.state.locked_player_move = locked_move

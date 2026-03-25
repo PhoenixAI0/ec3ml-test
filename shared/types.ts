@@ -1,5 +1,28 @@
-export type Scene = "intro" | "demo" | "behind" | "closing";
-export const SCENES: Scene[] = ["intro", "demo", "behind", "closing"];
+export type Scene =
+  | "intro"
+  | "about"
+  | "vibes"
+  | "reasons"
+  | "familiar"
+  | "section"
+  | "bridge"
+  | "demo"
+  | "behind"
+  | "closing"
+  | "join";
+export const SCENES: Scene[] = [
+  "intro",
+  "about",
+  "vibes",
+  "reasons",
+  "familiar",
+  "section",
+  "bridge",
+  "demo",
+  "behind",
+  "closing",
+  "join",
+];
 
 export type Move = "rock" | "paper" | "scissors";
 export type PredictedMove = Move | "unknown";
